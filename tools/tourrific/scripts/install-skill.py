@@ -2,12 +2,56 @@
 """Link the canonical skill into supported agent directories, preserving replaced skills."""
 import argparse
 from datetime import datetime, timezone
+import hashlib
 from pathlib import Path
+import shutil
+import subprocess
 import sys
+import tempfile
 
 
 def exists(path):
     return path.exists() or path.is_symlink()
+
+
+def standalone_source(checkout, base):
+    """Copy a clean commit and its built viewer into an immutable version directory."""
+    def git(*args):
+        return subprocess.run(['git', '-C', str(checkout), *args], capture_output=True, text=True, check=True).stdout.strip()
+    commit = git('rev-parse', '--verify', 'HEAD^{commit}')
+    if git('status', '--porcelain', '--untracked-files=normal'):
+        raise ValueError('Standalone installation requires a clean checkout. Commit or discard changes first.')
+    assets = checkout / 'tools/tourrific/viewer/dist/assets'
+    if len(list(assets.glob('*.js'))) != 1 or len(list(assets.glob('*.css'))) != 1:
+        raise ValueError('Build the viewer before standalone installation.')
+    versions = base / '.local/share/tourrific/versions'
+    versions.mkdir(parents=True, exist_ok=True)
+    dest = versions / commit
+    with tempfile.TemporaryDirectory(prefix='.install-', dir=versions) as tmp:
+        stage = Path(tmp) / 'version'
+        skill = stage / '.agents/skills/tourrific'
+        skill.mkdir(parents=True)
+        shutil.copy2(checkout / '.agents/skills/tourrific/SKILL.md', skill / 'SKILL.md')
+        for name in ('scripts', 'schema', 'viewer'):
+            (skill / name).symlink_to(f'../../../tools/tourrific/{name}', target_is_directory=True)
+        target = stage / 'tools/tourrific'
+        shutil.copytree(checkout / 'tools/tourrific/scripts', target / 'scripts', ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
+        shutil.copytree(checkout / 'tools/tourrific/schema', target / 'schema')
+        shutil.copytree(checkout / 'tools/tourrific/viewer/dist', target / 'viewer/dist')
+        def fingerprint(root):
+            result = {}
+            for path in root.rglob('*'):
+                name = str(path.relative_to(root))
+                if path.is_symlink(): result[name] = ('link', str(path.readlink()))
+                elif path.is_file(): result[name] = ('file', hashlib.sha256(path.read_bytes()).hexdigest())
+            return result
+        if exists(dest):
+            if dest.is_symlink() or not dest.is_dir() or fingerprint(dest) != fingerprint(stage):
+                raise ValueError(f'Existing version differs from the built checkout: {dest}')
+        else:
+            stage.rename(dest)
+    print(f'Installed version files: {dest}')
+    return dest / '.agents/skills/tourrific'
 
 
 def main():
@@ -16,15 +60,25 @@ def main():
     parser.add_argument('--scope', choices=('project', 'user'), required=True)
     parser.add_argument('--project', type=Path, help='Project directory (default: current directory); only for project scope')
     parser.add_argument('--replace', action='store_true', help='Back up existing conflicting skills before linking the current skill')
+    parser.add_argument('--standalone', action='store_true', help='Copy a clean commit and built assets into a user-managed version directory')
     args = parser.parse_args()
     if args.scope == 'user' and args.project:
         parser.error('--project applies only to project scope')
-    source = Path(__file__).resolve().parents[3] / '.agents' / 'skills' / 'tourrific'
+    checkout = Path(__file__).resolve().parents[3]
+    source = checkout / '.agents' / 'skills' / 'tourrific'
     if not (source / 'SKILL.md').is_file():
         parser.error(f'Canonical skill not found: {source}')
     base = (args.project or Path.cwd()).expanduser().resolve() if args.scope == 'project' else Path.home()
     if not base.is_dir():
         parser.error(f'Project directory does not exist: {base}')
+    if args.standalone and args.scope != 'user':
+        parser.error('--standalone requires --scope user')
+    if args.standalone:
+        try:
+            source = standalone_source(checkout, base)
+        except (OSError, ValueError, subprocess.CalledProcessError) as exc:
+            print(f'Standalone installation failed: {exc}', file=sys.stderr)
+            return 1
     agents = ('codex', 'claude') if args.agent == 'both' else (args.agent,)
     destinations = [base / ('.agents' if agent == 'codex' else '.claude') / 'skills' / 'tourrific' for agent in agents]
     conflicts = [dest for dest in destinations if exists(dest) and dest.resolve() != source.resolve()]

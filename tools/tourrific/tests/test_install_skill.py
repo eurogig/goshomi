@@ -4,6 +4,7 @@ import importlib.util
 from io import StringIO
 from pathlib import Path
 import sys
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -14,6 +15,31 @@ installer = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(installer)
 
 class InstallTest(unittest.TestCase):
+    def test_standalone_copy_is_versioned_and_independent(self):
+        with tempfile.TemporaryDirectory(prefix='tourrific-standalone-') as tmp:
+            root = Path(tmp)
+            checkout = root / 'checkout'
+            checkout.mkdir()
+            subprocess.run(['git', 'init', '-q', str(checkout)], check=True)
+            for name, content in {'.agents/skills/tourrific/SKILL.md': 'skill', 'tools/tourrific/scripts/tour.py': 'script', 'tools/tourrific/schema/tour.schema.json': '{}', '.gitignore': 'dist/\n'}.items():
+                path = checkout / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content)
+            assets = checkout / 'tools/tourrific/viewer/dist/assets'
+            assets.mkdir(parents=True)
+            (assets / 'viewer.js').write_text('js')
+            (assets / 'viewer.css').write_text('css')
+            subprocess.run(['git', '-C', str(checkout), 'add', '.'], check=True)
+            subprocess.run(['git', '-C', str(checkout), '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-qm', 'fixture'], check=True)
+            source = installer.standalone_source(checkout, root)
+            self.assertEqual((source / 'SKILL.md').read_text(), 'skill')
+            self.assertEqual((source / 'scripts/tour.py').read_text(), 'script')
+            self.assertTrue((source / 'viewer/dist/assets/viewer.js').is_file())
+            self.assertEqual(installer.standalone_source(checkout, root), source)
+            (checkout / '.agents/skills/tourrific/SKILL.md').write_text('changed')
+            self.assertEqual((source / 'SKILL.md').read_text(), 'skill')
+            with self.assertRaises(ValueError): installer.standalone_source(checkout, root)
+
     def test_conflict_backup_and_idempotence(self):
         with tempfile.TemporaryDirectory(prefix='tourrific-install-') as tmp:
             root = Path(tmp)

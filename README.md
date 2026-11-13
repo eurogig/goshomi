@@ -8,16 +8,20 @@ Tourrific turns a codebase into an interactive, source-grounded architectural to
 
 Tourrific is distributed from this GitHub repository. Review the source before installing, and use a tagged release or commit if you want to pin the version.
 
-Clone the repository, then install the viewer's dependencies and build its assets:
+To install independently of your working checkout, choose a full commit SHA that includes `--standalone` and substitute it below. Release tags can also be checked out, but a commit SHA pins the exact source.
 
 ```sh
-git clone https://github.com/eurogig/tourrific.git
-cd tourrific
+git clone https://github.com/eurogig/tourrific.git tourrific-install
+cd tourrific-install
+git checkout --detach <FULL_COMMIT_SHA>
 npm ci --prefix tools/tourrific/viewer
 npm --prefix tools/tourrific/viewer run build
+python3 tools/tourrific/scripts/install-skill.py --agent both --scope user --standalone
 ```
 
-Install the skill for Codex, Claude Code, or both:
+The installer copies the skill, scripts, schema, and built viewer to `~/.local/share/tourrific/versions/<commit>/`, then links the agents to that copy. You may remove the temporary checkout after installation. To update, repeat the steps with a different reviewed commit and add `--replace` to the installer command; the previous skill links are backed up. Choose `--agent codex` or `--agent claude` to install for one agent.
+
+For development, install directly from a checkout after building the viewer:
 
 ```sh
 python3 tools/tourrific/scripts/install-skill.py --agent codex --scope user

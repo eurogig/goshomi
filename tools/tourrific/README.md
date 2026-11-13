@@ -4,6 +4,8 @@ Tourrific produces a source-grounded architectural tour and a lightweight threat
 
 ## Install once
 
+For an installation independent of a development checkout, follow the pinned `--standalone` instructions in the [root README](../../README.md). The installer copies a clean Git commit and built viewer to `~/.local/share/tourrific/versions/<commit>/`. Updating to a different commit is explicit and requires `--replace`; the previous skill links are backed up. A commit identifies the source, not a signed or reproducible build, so review the source and dependencies you build. No release tag is created by the installer.
+
 Keep a Tourrific checkout as the portable dependency. From its root, install the viewer's build dependencies and build its reusable assets:
 
 ```sh
