@@ -149,8 +149,8 @@
     },
     "chapters": {
       "type": "array",
-      "minItems": 7,
-      "maxItems": 7,
+      "minItems": 8,
+      "maxItems": 8,
       "items": {
         "type": "object",
         "required": [
@@ -324,6 +324,21 @@
                       "type": "string",
                       "minLength": 1
                     }
+                  }
+                },
+                "finding": {
+                  "type": "object",
+                  "required": ["status", "severity", "issue", "reachability", "impact", "fixExplanation", "fixCode", "fixPrompt"],
+                  "properties": {
+                    "status": {"enum": ["confirmed", "needs verification"]},
+                    "severity": {"enum": ["Critical", "High", "Medium", "Low", "Informational", "Needs verification"]},
+                    "issue": {"type": "string", "minLength": 1},
+                    "reachability": {"type": "string", "minLength": 1},
+                    "impact": {"type": "string", "minLength": 1},
+                    "fixExplanation": {"type": "string", "minLength": 1},
+                    "fixCode": {"type": "string", "minLength": 1},
+                    "fixPatch": {"type": "string", "minLength": 1, "description": "Optional reviewable unified Git patch with repo-relative path and context from the analyzed snapshot."},
+                    "fixPrompt": {"type": "string", "minLength": 1}
                   }
                 }
               }

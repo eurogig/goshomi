@@ -20,7 +20,7 @@ class PortableTourTest(unittest.TestCase):
         ref = {'path': 'app.py', 'start': 2, 'end': 3, 'symbol': 'main'}
         node = {'id': 'app', 'label': 'App', 'kind': 'ENTRY', 'description': 'Entry point', 'refs': [ref], 'position': {'x': 0, 'y': 0}}
         step = {'id': 'entry', 'title': 'Entry', 'body': 'Runs main.', 'node': 'app', 'refs': [ref], 'status': 'verified'}
-        chapters = [{'id': str(i), 'title': 'Chapter', 'eyebrow': 'TOUR', 'intro': 'Overview', 'steps': [step]} for i in range(7)]
+        chapters = [{'id': str(i), 'title': 'Chapter', 'eyebrow': 'TOUR', 'intro': 'Overview', 'steps': [step]} for i in range(8)]
         analysis = {'schemaVersion': '1.0', 'repository': {'name': 'sample', 'description': 'Example', 'technologies': ['Python'], 'revision': None, 'generatedAt': '', 'snapshot': ''}, 'nodes': [node], 'edges': [], 'chapters': chapters, 'sources': {}}
         self.analysis = self.base / 'analysis.json'
         self.analysis.write_text(json.dumps(analysis))
@@ -58,7 +58,7 @@ class PortableTourTest(unittest.TestCase):
                 'assessment':{'level':'Needs verification','rationale':'Exposure is unknown.',
                               'references':[{'title':'OWASP LLM Top 10 2026','url':'https://genai.owasp.org/resource/owasp-genai-llm-top-10-2026/'}, {'title':'OWASP Agentic Top 10 2026','url':'https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/'}]},
                 'mitigationPrompt':'Review app.py:2-3 and verify controls before changing them.'}
-        data['chapters'][6]['steps'][0]['risk'] = risk
+        data['chapters'][7]['steps'][0]['risk'] = risk
         self.analysis.write_text(json.dumps(data))
         baseline = self.run_cli('snapshot').stdout.strip()
         self.run_cli('package', '--analysis', self.analysis, '--baseline', baseline, '--review-policy', 'owasp-genai-2026-v1')
@@ -75,7 +75,7 @@ class PortableTourTest(unittest.TestCase):
 
     def test_legacy_risk_needs_regeneration_before_reuse(self):
         data = json.loads(self.analysis.read_text())
-        data['chapters'][6]['steps'][0]['risk'] = {'asset':'Data','boundary':'API','scenario':'Possible misuse',
+        data['chapters'][7]['steps'][0]['risk'] = {'asset':'Data','boundary':'API','scenario':'Possible misuse',
             'consequence':'Exposure','control':'Unknown','mitigation':'Review','confidence':'Unverified'}
         self.analysis.write_text(json.dumps(data))
         baseline = self.run_cli('snapshot').stdout.strip()
@@ -148,7 +148,7 @@ class PortableTourTest(unittest.TestCase):
         node = dict(data['nodes'][0], id='service', label='Service')
         data['nodes'].append(node)
         data['edges'] = [{'source': 'app', 'target': 'service', 'label': 'calls'}]
-        data['chapters'][6]['steps'][0]['risk'] = {
+        data['chapters'][7]['steps'][0]['risk'] = {
             'asset': 'Data', 'boundary': 'App to service', 'scenario': 'Possible misuse',
             'consequence': 'Potential exposure', 'control': 'Not established',
             'mitigation': 'Review access', 'confidence': 'Needs verification',
@@ -157,11 +157,11 @@ class PortableTourTest(unittest.TestCase):
         self.analysis.write_text(json.dumps(data))
         self.run_cli('package', '--analysis', self.analysis)
         self.run_cli('verify')
-        data['chapters'][6]['steps'][0]['risk']['attackPath'] = ['app', 'missing']
+        data['chapters'][7]['steps'][0]['risk']['attackPath'] = ['app', 'missing']
         self.analysis.write_text(json.dumps(data))
         result = self.run_cli('package', '--analysis', self.analysis, succeeds=False)
         self.assertIn('attack path references missing node', result.stderr)
-        data['chapters'][6]['steps'][0]['risk']['attackPath'] = ['app', 'app']
+        data['chapters'][7]['steps'][0]['risk']['attackPath'] = ['app', 'app']
         self.analysis.write_text(json.dumps(data))
         result = self.run_cli('package', '--analysis', self.analysis, succeeds=False)
         self.assertIn('attack path has no architecture connection', result.stderr)
