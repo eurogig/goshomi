@@ -14,7 +14,9 @@ To install independently of your working checkout, choose a full commit SHA that
 git clone https://github.com/eurogig/tourrific.git tourrific-install
 cd tourrific-install
 git checkout --detach <FULL_COMMIT_SHA>
-npm ci --prefix tools/tourrific/viewer
+npm ci --prefix tools/tourrific/viewer \
+  --registry="$(npm config get registry)" \
+  --verbose
 npm --prefix tools/tourrific/viewer run build
 python3 tools/tourrific/scripts/install-skill.py --agent both --scope user --standalone
 ```
