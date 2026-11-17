@@ -33,6 +33,8 @@ Omit `--project` for the current directory. Project installation deliberately ad
 
 From the project you want to understand, invoke **`$tourrific`** in Codex or **`/tourrific`** in Claude Code. The skill uses the current project's Git root, or the current directory outside Git. Ask for `--repo /path/to/project` to select a different target, or `--output /path/to/output` to choose an output directory. The Tourrific source checkout itself must be explicitly selected with `--repo` before generating a tour there.
 
+Before generating or reusing a tour, the skill checks whether its output is exposed to Git. If it is not ignored, the skill asks whether to add an ignore rule or use another location; it separately warns about files already tracked by Git. Ignore rules do not remove tracked files or prevent force-adds. The same check applies to custom output inside any Git repository. You can inspect the result with `python3 "$SKILL_DIR/scripts/tour.py" output-status` and the same `--repo` and `--output` options.
+
 When an existing tour has a matching repository snapshot and intact generated files, the skill reuses it and starts the preview immediately. Otherwise the agent indexes the target and authors an evidence-based narrative; the scripts cannot infer that narrative by themselves. Ask to regenerate or refresh explicitly to bypass reuse. The skill packages the result into `<target>/.tourrific/` by default:
 
 ```text
@@ -65,8 +67,8 @@ BASELINE=$(python3 "$SKILL_DIR/scripts/tour.py" snapshot)
 python3 "$SKILL_DIR/scripts/tour.py" index
 python3 "$SKILL_DIR/scripts/tour.py" prepare
 # Author .tourrific/analysis.json using "$SKILL_DIR/schema/tour.schema.json".
-# After completing the source-based threat review, including AI applicability:
-python3 "$SKILL_DIR/scripts/tour.py" package --analysis .tourrific/analysis.json --baseline "$BASELINE" --review-policy owasp-genai-2026-v1
+# After completing the security path review and threat review, including AI applicability and self-contained remediation prompts:
+python3 "$SKILL_DIR/scripts/tour.py" package --analysis .tourrific/analysis.json --baseline "$BASELINE" --review-policy self-contained-remediation-2026-v3
 python3 "$SKILL_DIR/scripts/tour.py" verify
 ```
 
@@ -74,7 +76,7 @@ python3 "$SKILL_DIR/scripts/tour.py" verify
 
 For a non-Git target or a repository with submodules, omit the `snapshot` command and `--baseline`; such tours are not automatically reused.
 
-`check` compares the snapshot captured before analysis with the current Git revision, index, tracked and untracked files, and source files eligible for indexing, including eligible Git-ignored source files. It also checks the integrity of generated viewer files. Generated output is excluded; other Git-ignored files outside the index are not tracked. The snapshot contains hashes, not source contents. Older tours without a pre-analysis snapshot, risk assessments, mitigation prompts, or the AI security applicability review are regenerated once. `--review-policy` records the agent’s attestation that it completed the applicability review; it is not automated proof of coverage and must not be used to mark an old analysis as reviewed. Non-Git targets and repositories containing submodules are analyzed normally but are not automatically reused. If Git or source inspection fails, the check does not claim the tour is current. `verify` separately compares cited excerpts and the Git revision with the target. Re-run semantic analysis after changes; packaging alone does not update explanations. The source snapshots blank uncited lines to preserve line numbers. Tour data and the viewer contain the same cited excerpts, so inspect them before sharing.
+`check` compares the snapshot captured before analysis with the current Git revision, index, tracked and untracked files, and source files eligible for indexing, including eligible Git-ignored source files. It also checks the integrity of generated viewer files. Generated output is excluded; other Git-ignored files outside the index are not tracked. The snapshot contains hashes, not source contents. Older tours without a pre-analysis snapshot, risk assessments, mitigation prompts, or the current security path review are regenerated once. `--review-policy` records the agent’s attestation that it completed the security path and applicability reviews; the packager checks referenced paths and line ranges in new remediation prompts, but does not establish prompt completeness or correctness; this is not automated proof of coverage and must not be used to mark an old analysis as reviewed. Non-Git targets and repositories containing submodules are analyzed normally but are not automatically reused. If Git or source inspection fails, the check does not claim the tour is current. `verify` separately compares cited excerpts and the Git revision with the target. Re-run semantic analysis after changes; packaging alone does not update explanations. The source snapshots blank uncited lines to preserve line numbers. Tour data and the viewer contain the same cited excerpts, so inspect them before sharing.
 
 ## Safety and limits
 

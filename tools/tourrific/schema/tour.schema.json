@@ -61,9 +61,11 @@
         },
         "threatReviewPolicy": {
           "enum": [
-            "owasp-genai-2026-v1"
+            "owasp-genai-2026-v1",
+            "security-path-review-2026-v2",
+            "self-contained-remediation-2026-v3"
           ],
-          "description": "Agent attestation that AI-specific threat applicability was reviewed."
+          "description": "Agent attestation of the completed security review workflow."
         }
       }
     },

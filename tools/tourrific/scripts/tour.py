@@ -8,7 +8,9 @@ SECRET = re.compile(r'(?i)(?:-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|(
 EXTENSIONS = {'.ts','.tsx','.js','.jsx','.mjs','.json','.py','.go','.rs','.java','.md','.yaml','.yml','.css','.html','.toml','.sh'}
 ASSET_ROOT = Path(__file__).resolve().parent.parent
 MARKER = '.tourrific-owner.json'
-REVIEW_POLICY = 'owasp-genai-2026-v1'
+REVIEW_POLICY = 'self-contained-remediation-2026-v3'
+PREVIOUS_REVIEW_POLICY = 'security-path-review-2026-v2'
+LEGACY_REVIEW_POLICY = 'owasp-genai-2026-v1'
 
 def digest(data): return hashlib.sha256(data.encode('utf-8')).hexdigest()
 
@@ -134,6 +136,44 @@ def output_path(root, option):
 
 def owner_id(root): return digest(str(root))
 
+def output_status(out):
+    """Report Git exposure without creating or modifying the output directory."""
+    ancestor = out
+    while not ancestor.exists(): ancestor = ancestor.parent
+    if not ancestor.is_dir(): ancestor = ancestor.parent
+    def git(*args):
+        return subprocess.run(['git', '-C', str(ancestor), *args], capture_output=True)
+    top = git('rev-parse', '--show-toplevel')
+    if top.returncode:
+        inside = git('rev-parse', '--is-inside-work-tree')
+        if inside.returncode == 128 and b'not a git repository' in inside.stderr.lower():
+            return {'status': 'outside_git', 'output': str(out)}
+        raise ValueError('Cannot determine whether output is inside a Git repository')
+    git_root = Path(os.fsdecode(top.stdout.rstrip(b'\n'))).resolve()
+    if not out.is_relative_to(git_root): return {'status': 'outside_git', 'output': str(out)}
+    ancestor = git_root
+    relative = out.relative_to(git_root).as_posix()
+    tracked = git('ls-files', '-z', '--', ':(literal)' + relative)
+    if tracked.returncode: raise ValueError('Cannot inspect tracked output files')
+    tracked_files = [os.fsdecode(name) for name in tracked.stdout.split(b'\0') if name]
+    # Check an arbitrary future file as well as existing files, since negated
+    # patterns can leave individual files exposed inside an ignored directory.
+    paths = [out / name for name in ('.tourrific-ignore-probe', MARKER, 'analysis.json',
+             'index.html', 'tour.json', 'assets/viewer.js', 'assets/viewer.css',
+             'sources/' + '0' * 64 + '.txt')]
+    if out.is_dir():
+        for base, dirs, names in os.walk(out, followlinks=False):
+            dirs[:] = [d for d in dirs if not (Path(base) / d).is_symlink()]
+            paths.extend(Path(base) / name for name in names)
+    exposed = []
+    for path in paths:
+        result = git('check-ignore', '--no-index', '-q', '--', str(path))
+        if result.returncode == 1: exposed.append(path.relative_to(git_root).as_posix())
+        elif result.returncode != 0: raise ValueError('Cannot inspect Git ignore rules for output')
+    status = 'tracked' if tracked_files else 'exposed' if exposed else 'ignored'
+    return {'status': status, 'output': str(out), 'git_root': str(git_root),
+            'tracked_files': tracked_files, 'exposed_paths': exposed}
+
 def prepare(root,out):
     if out.exists() and not out.is_dir(): raise ValueError('Output must be a directory')
     marker=out/MARKER
@@ -189,6 +229,21 @@ def package(root,analysis,out,baseline=None,review_policy=None):
     tour['repository']['snapshot']=digest(''.join(k+v['sha256'] for k,v in sorted(tour['sources'].items())))
     from validate import validate
     errors=validate(tour)
+    if review_policy == REVIEW_POLICY:
+        for chapter in tour.get('chapters', []):
+            for step in chapter.get('steps', []):
+                for field, prompt_key in (('finding', 'fixPrompt'), ('risk', 'mitigationPrompt')):
+                    item = step.get(field)
+                    if not isinstance(item, dict): continue
+                    prompt = item.get(prompt_key, '')
+                    if not isinstance(prompt, str): continue  # Schema reports invalid types.
+                    for ref in step.get('refs', []):
+                        if not all(k in ref for k in ('path', 'start', 'end')): continue
+                        citation = f"{ref['path']}:{ref['start']}-{ref['end']}"
+                        if citation not in prompt:
+                            errors.append(f"{field}.{prompt_key} for {step.get('id', '?')} must include {citation}")
+                    if not prompt.strip():
+                        errors.append(f"{field}.{prompt_key} for {step.get('id', '?')} is required")
     if errors: raise ValueError('Invalid tour:\n'+'\n'.join(errors))
     dist=ASSET_ROOT/'viewer/dist/assets'
     js=list(dist.glob('*.js')); css=list(dist.glob('*.css'))
@@ -257,7 +312,7 @@ def check_reusable(root,out):
             if risk and (not risk.get('assessment') or not risk.get('mitigationPrompt')):
                 raise ValueError('No reusable tour: threat findings need qualitative assessments and mitigation prompts')
     if tour.get('repository',{}).get('threatReviewPolicy') != REVIEW_POLICY:
-        raise ValueError('No reusable tour: AI security applicability review needs refresh')
+        raise ValueError('No reusable tour: security path review needs refresh')
     baseline=tour.get('repository',{}).get('gitFingerprint')
     if not isinstance(baseline,str) or not re.fullmatch(r'[0-9a-f]{64}',baseline):
         raise ValueError('No reusable tour: no Git snapshot was captured before analysis')
@@ -266,17 +321,18 @@ def check_reusable(root,out):
 
 def main():
     p=argparse.ArgumentParser(description=__doc__); sub=p.add_subparsers(dest='cmd',required=True)
-    for command in ('index','prepare','package','verify','snapshot','check'):
+    for command in ('index','prepare','package','verify','snapshot','check','output-status'):
         c=sub.add_parser(command); c.add_argument('--repo',help='Target directory (default: current project Git root, or current directory)'); c.add_argument('--output',help='Output directory (default: REPO/.tourrific)')
         if command=='package':
             c.add_argument('--analysis',required=True,help='Agent-authored analysis JSON')
             c.add_argument('--baseline',help='Git snapshot captured before analysis; enables safe reuse')
-            c.add_argument('--review-policy',choices=[REVIEW_POLICY],help='Attest that the agent completed the applicable threat review before packaging')
+            c.add_argument('--review-policy',choices=[REVIEW_POLICY, PREVIOUS_REVIEW_POLICY, LEGACY_REVIEW_POLICY],help='Attest that the agent completed the specified review before packaging')
     a=p.parse_args(); root=target_repo(a.repo); out=output_path(root,a.output)
     checkout=ASSET_ROOT.parent.parent
     if a.cmd in ('prepare','package') and not a.repo and root == checkout and (checkout / '.agents/skills/tourrific/SKILL.md').exists():
         raise ValueError('Select the Tourrific source checkout explicitly with --repo before writing a tour here')
-    if a.cmd=='index': print(json.dumps({'revision':revision(root),'files':index(root,out)},indent=2))
+    if a.cmd=='output-status': print(json.dumps(output_status(out), indent=2))
+    elif a.cmd=='index': print(json.dumps({'revision':revision(root),'files':index(root,out)},indent=2))
     elif a.cmd=='prepare': prepare(root,out); print(f'Output ready: {out}')
     elif a.cmd=='package': package(root,a.analysis,out,a.baseline,a.review_policy)
     elif a.cmd=='verify': verify(root,out)

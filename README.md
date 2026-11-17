@@ -42,7 +42,7 @@ If an installation already exists, the installer leaves it alone. Use `--replace
 
 Open the repository you want to understand in Codex or Claude Code and invoke the `tourrific` skill. You can also ask the agent to use `--repo /path/to/repository` for another local repository, or `--output /path/to/output` for a custom output location.
 
-Chapter 7 reviews code-level vulnerabilities with evidence, reachability, and proposed fixes. When a validated patch is available, Chapter 7 offers a preview and download for review; patches are never applied automatically. Chapter 8 presents the broader threat model. The skill reuses a valid tour when its repository snapshot still matches. Ask it to regenerate or refresh the tour to force a fresh analysis. Generated tours go in `.tourrific/` by default. The agent starts a local preview server and returns its URL; it does not open a browser automatically.
+Chapter 7 reviews code-level vulnerabilities with evidence, reachability, and proposed fixes. When a validated patch is available, Chapter 7 offers a preview and download for review; patches are never applied automatically. Chapter 8 presents the broader threat model. The skill reuses a valid tour when its repository snapshot still matches. Ask it to regenerate or refresh the tour to force a fresh analysis. Generated tours go in `.tourrific/` by default. Before writing, the skill checks Git exposure and asks how to protect output that is not ignored. The agent starts a local preview server and returns its URL; it does not open a browser automatically.
 
 ## What's included
 

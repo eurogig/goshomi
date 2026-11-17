@@ -61,7 +61,7 @@ class PortableTourTest(unittest.TestCase):
         data['chapters'][7]['steps'][0]['risk'] = risk
         self.analysis.write_text(json.dumps(data))
         baseline = self.run_cli('snapshot').stdout.strip()
-        self.run_cli('package', '--analysis', self.analysis, '--baseline', baseline, '--review-policy', 'owasp-genai-2026-v1')
+        self.run_cli('package', '--analysis', self.analysis, '--baseline', baseline, '--review-policy', 'self-contained-remediation-2026-v3')
         self.run_cli('check')
         for unsafe_url in ('javascript:alert(1)', 'https://owasp.org.example.com/path', 'https://owasp.org@evil.example/path'):
             risk['assessment']['references'][0]['url'] = unsafe_url
@@ -73,13 +73,42 @@ class PortableTourTest(unittest.TestCase):
         self.analysis.write_text(json.dumps(data))
         self.run_cli('package', '--analysis', self.analysis, succeeds=False)
 
+    def test_security_prompts_must_include_step_references(self):
+        data = json.loads(self.analysis.read_text())
+        finding = {'status': 'needs verification', 'severity': 'Needs verification',
+                   'issue': 'Unsafe input', 'reachability': 'Unknown', 'impact': 'Potential exposure',
+                   'fixExplanation': 'Review the entry point', 'fixCode': 'pass',
+                   'fixPrompt': 'Inspect the cited source paths.'}
+        risk = {'asset': 'Data', 'boundary': 'API', 'scenario': 'Possible misuse',
+                'consequence': 'Exposure', 'control': 'Unknown', 'mitigation': 'Review',
+                'confidence': 'Unverified', 'mitigationPrompt': 'Inspect the cited source paths.'}
+        data['chapters'][6]['steps'][0]['finding'] = finding
+        data['chapters'][7]['steps'][0]['risk'] = risk
+        self.analysis.write_text(json.dumps(data))
+        result = self.run_cli('package', '--analysis', self.analysis, '--review-policy', 'self-contained-remediation-2026-v3', succeeds=False)
+        self.assertIn('finding.fixPrompt', result.stderr)
+        self.assertIn('risk.mitigationPrompt', result.stderr)
+        self.assertIn('app.py:2-3', result.stderr)
+        finding['fixPrompt'] = 'Review app.py:2-3 and fix the unsafe input.'
+        risk['mitigationPrompt'] = 'Review app.py:2-3 and protect the API boundary.'
+        self.analysis.write_text(json.dumps(data))
+        self.run_cli('package', '--analysis', self.analysis, '--review-policy', 'self-contained-remediation-2026-v3')
+
+    def test_older_review_policy_requires_fresh_analysis(self):
+        baseline = self.run_cli('snapshot').stdout.strip()
+        for policy in ('owasp-genai-2026-v1', 'security-path-review-2026-v2'):
+            with self.subTest(policy=policy):
+                self.run_cli('package', '--analysis', self.analysis, '--baseline', baseline, '--review-policy', policy)
+                result = self.run_cli('check', succeeds=False)
+                self.assertIn('security path review needs refresh', result.stderr)
+
     def test_legacy_risk_needs_regeneration_before_reuse(self):
         data = json.loads(self.analysis.read_text())
         data['chapters'][7]['steps'][0]['risk'] = {'asset':'Data','boundary':'API','scenario':'Possible misuse',
             'consequence':'Exposure','control':'Unknown','mitigation':'Review','confidence':'Unverified'}
         self.analysis.write_text(json.dumps(data))
         baseline = self.run_cli('snapshot').stdout.strip()
-        self.run_cli('package', '--analysis', self.analysis, '--baseline', baseline, '--review-policy', 'owasp-genai-2026-v1')
+        self.run_cli('package', '--analysis', self.analysis, '--baseline', baseline, '--review-policy', 'security-path-review-2026-v2')
         result = self.run_cli('check', succeeds=False)
         self.assertIn('need qualitative assessments', result.stderr)
 
@@ -90,7 +119,7 @@ class PortableTourTest(unittest.TestCase):
         subprocess.run(['git', '-C', str(self.repo), '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-qm', 'initial'], check=True)
         baseline = self.run_cli('snapshot').stdout.strip()
         self.assertEqual(baseline, self.run_cli('snapshot', cwd=self.repo / 'nested').stdout.strip())
-        self.run_cli('package', '--analysis', self.analysis, '--baseline', baseline, '--review-policy', 'owasp-genai-2026-v1')
+        self.run_cli('package', '--analysis', self.analysis, '--baseline', baseline, '--review-policy', 'self-contained-remediation-2026-v3')
         self.run_cli('check')
         (self.repo / '.tourrific' / 'analysis.json').write_text('output does not invalidate the tour')
         (self.repo / 'ignored.txt').write_text('ignored by git')
@@ -123,7 +152,7 @@ class PortableTourTest(unittest.TestCase):
         subprocess.run(['git', '-C', str(self.repo), 'add', '.'], check=True)
         subprocess.run(['git', '-C', str(self.repo), '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-qm', 'initial'], check=True)
         baseline = self.run_cli('snapshot').stdout.strip()
-        self.run_cli('package', '--analysis', self.analysis, '--baseline', baseline, '--review-policy', 'owasp-genai-2026-v1')
+        self.run_cli('package', '--analysis', self.analysis, '--baseline', baseline, '--review-policy', 'self-contained-remediation-2026-v3')
         self.run_cli('check')
         subprocess.run(['git', '-C', str(self.repo), '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '--allow-empty', '-qm', 'new revision'], check=True)
         self.run_cli('check', succeeds=False)
@@ -132,8 +161,8 @@ class PortableTourTest(unittest.TestCase):
         baseline = self.run_cli('snapshot').stdout.strip()
         self.run_cli('package', '--analysis', self.analysis, '--baseline', baseline)
         result = self.run_cli('check', succeeds=False)
-        self.assertIn('AI security applicability review needs refresh', result.stderr)
-        self.run_cli('package', '--analysis', self.analysis, '--baseline', baseline, '--review-policy', 'owasp-genai-2026-v1')
+        self.assertIn('security path review needs refresh', result.stderr)
+        self.run_cli('package', '--analysis', self.analysis, '--baseline', baseline, '--review-policy', 'self-contained-remediation-2026-v3')
         self.run_cli('check')
 
     def test_legacy_and_non_git_never_reuse(self):
@@ -172,5 +201,31 @@ class PortableTourTest(unittest.TestCase):
         (out / 'index.html').write_text('do not overwrite')
         self.run_cli('package', '--repo', self.repo, '--output', out, '--analysis', self.analysis, cwd=self.base, succeeds=False)
         self.assertEqual((out / 'index.html').read_text(), 'do not overwrite')
+
+    def test_output_status_detects_git_exposure(self):
+        def status(*args): return json.loads(self.run_cli('output-status', *args).stdout)
+        self.assertEqual(status()['status'], 'exposed')
+        (self.repo / '.gitignore').write_text('/.tourrific/\n')
+        self.assertEqual(status()['status'], 'ignored')
+        out = self.repo / '.tourrific'
+        out.mkdir()
+        (out / 'tour.json').write_text('{}')
+        subprocess.run(['git', '-C', str(self.repo), 'add', '-f', '.tourrific/tour.json'], check=True)
+        result = status()
+        self.assertEqual(result['status'], 'tracked')
+        self.assertIn('.tourrific/tour.json', result['tracked_files'])
+        self.assertEqual(status('--output', self.base / 'outside')['status'], 'outside_git')
+        other = self.base / 'other'; other.mkdir()
+        subprocess.run(['git', 'init', '-q', str(other)], check=True)
+        self.assertEqual(status('--output', other / 'custom')['status'], 'exposed')
+        self.assertEqual(status('--output', other / 'custom')['git_root'], str(other.resolve()))
+
+    def test_output_status_checks_negated_existing_files(self):
+        (self.repo / '.gitignore').write_text('/reports/*\n!/reports/public.json\n')
+        out = self.repo / 'reports'; out.mkdir()
+        (out / 'public.json').write_text('{}')
+        result = json.loads(self.run_cli('output-status', '--output', out).stdout)
+        self.assertEqual(result['status'], 'exposed')
+        self.assertIn('reports/public.json', result['exposed_paths'])
 
 if __name__ == '__main__': unittest.main()
