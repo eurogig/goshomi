@@ -120,11 +120,29 @@ class InstallTest(unittest.TestCase):
                         (assets / 'viewer.css').write_text('css')
                     return subprocess.CompletedProcess(command, 0)
                 return real_run(command, **kwargs)
-            with patch.object(bootstrap, 'REPOSITORY', str(repo)), patch.object(sys, 'argv', ['install.py', '--agent', 'codex']), patch.dict('os.environ', {'HOME': str(root)}), patch.object(subprocess, 'run', side_effect=run):
-                self.assertEqual(bootstrap.main(), 0)
             installed = root / '.agents/skills/goshomi'
+            def install(*extra):
+                with patch.object(bootstrap, 'REPOSITORY', str(repo)), patch.object(sys, 'argv', ['install.py', '--agent', 'codex', *extra]), patch.dict('os.environ', {'HOME': str(root)}), patch.object(subprocess, 'run', side_effect=run):
+                    return bootstrap.main()
+            self.assertEqual(install(), 0)
             self.assertEqual((installed / 'SKILL.md').read_text(), 'skill')
             self.assertTrue((installed / 'viewer/dist/assets/viewer.js').is_file())
             self.assertTrue((installed / 'scripts/tour.py').is_file())
+            first = installed.resolve()
+            (repo / '.agents/skills/goshomi/SKILL.md').write_text('updated skill')
+            subprocess.run(['git', '-C', str(repo), 'add', '.'], check=True)
+            subprocess.run(['git', '-C', str(repo), '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-qm', 'update'], check=True)
+            self.assertEqual(install(), 0)
+            self.assertEqual((installed / 'SKILL.md').read_text(), 'updated skill')
+            self.assertNotEqual(installed.resolve(), first)
+            backups = list((root / '.agents/goshomi-backups').glob('goshomi-*'))
+            self.assertEqual(len(backups), 1)
+            self.assertEqual(backups[0].resolve(), first)
+            self.assertEqual(install(), 0)
+            self.assertEqual(len(list((root / '.agents/goshomi-backups').glob('goshomi-*'))), 1)
+            self.assertEqual(install('--ref', 'HEAD~1'), 1)
+            self.assertEqual((installed / 'SKILL.md').read_text(), 'updated skill')
+            self.assertEqual(install('--ref', 'HEAD~1', '--replace'), 0)
+            self.assertEqual((installed / 'SKILL.md').read_text(), 'skill')
 
 if __name__ == '__main__': unittest.main()

@@ -4,7 +4,7 @@ Goshomi produces a source-grounded architectural tour and a lightweight threat m
 
 ## Install once
 
-For an installation independent of a development checkout, follow the installer instructions in the [root README](../../README.md). The installer copies a clean Git commit and built viewer to `~/.local/share/goshomi/versions/<commit>/`. Updating to a different commit is explicit and requires `--replace`; the previous skill links are backed up. A commit identifies the source, not a signed or reproducible build, so review the source and dependencies you build. No release tag is created by the installer.
+For an installation independent of a development checkout, follow the installer instructions in the [root README](../../README.md). The installer copies a clean Git commit and built viewer to `~/.local/share/goshomi/versions/<commit>/`. Updating to a newer descendant commit is automatic; previous skill links are backed up. Downgrades, unrelated histories, and non-managed skills require `--replace`. A commit identifies the source, not a signed or reproducible build, so review the source and dependencies you build. No release tag is created by the installer.
 
 Keep a Goshomi checkout as the portable dependency. From its root, install the viewer's build dependencies and build its reusable assets:
 

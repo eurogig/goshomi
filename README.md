@@ -27,7 +27,7 @@ Install for Codex and Claude Code with Python 3, Git, Node.js, and npm installed
 
 The installer downloads the repository into a temporary directory, builds the viewer, and installs an independent copy under `~/.local/share/goshomi/versions/`. It links the skill for both agents; use `--agent codex` or `--agent claude` for just one. Restart the agent to discover the skill. The downloaded installer and temporary build files are removed automatically.
 
-To update or replace an existing installation, run the same command with `--replace` after `"$tmpdir/install.py"`. Conflicting Goshomi skills are backed up outside the active skill directories. Existing `tourrific` skills are separate and must be removed or backed up manually when you migrate. To pin a reviewed commit or tag, pass `--ref <commit-or-tag>`; the default is `main`. Review the installer and source before running them. Building requires network access to GitHub and the configured npm registry.
+Run the same install command again to update a standalone Goshomi installation to a newer descendant commit; its previous skill links are backed up outside the active skill directories. For a downgrade, a different history, or an unrelated existing skill, add `--replace` after `"$tmpdir/install.py"` to back it up and replace it. Existing `tourrific` skills are separate and must be removed or backed up manually when you migrate. To pin a reviewed commit or tag, pass `--ref <commit-or-tag>`; the default is `main`. Review the installer and source before running them. Building requires network access to GitHub and the configured npm registry.
 
 For development, install directly from a checkout after building the viewer:
 

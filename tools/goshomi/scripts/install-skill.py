@@ -54,6 +54,33 @@ def standalone_source(checkout, base):
     return dest / '.agents/skills/goshomi'
 
 
+def managed_revision(path, base, require_link=True):
+    """Return the commit for a link into this user's standalone versions directory."""
+    if require_link and not path.is_symlink():
+        return None
+    versions = (base / '.local/share/goshomi/versions').resolve()
+    try:
+        parts = path.resolve().relative_to(versions).parts
+    except (ValueError, OSError, RuntimeError):
+        return None
+    if (len(parts) != 4 or parts[1:] != ('.agents', 'skills', 'goshomi')
+            or len(parts[0]) not in (40, 64)
+            or any(c not in '0123456789abcdef' for c in parts[0])):
+        return None
+    return parts[0]
+
+
+def is_managed_upgrade(dest, source, base, checkout):
+    """Only automatically advance an existing managed link to a descendant commit."""
+    old = managed_revision(dest, base)
+    new = managed_revision(source, base, require_link=False)
+    if not old or not new or old == new:
+        return False
+    result = subprocess.run(['git', '-C', str(checkout), 'merge-base', '--is-ancestor', old, new],
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return result.returncode == 0
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--agent', choices=('codex', 'claude', 'both'), required=True)
@@ -82,8 +109,13 @@ def main():
     agents = ('codex', 'claude') if args.agent == 'both' else (args.agent,)
     destinations = [base / ('.agents' if agent == 'codex' else '.claude') / 'skills' / 'goshomi' for agent in agents]
     conflicts = [dest for dest in destinations if exists(dest) and dest.resolve() != source.resolve()]
-    if conflicts and not args.replace:
-        for dest in conflicts:
+    try:
+        blocked = [dest for dest in conflicts if not (args.standalone and is_managed_upgrade(dest, source, base, checkout))]
+    except OSError as exc:
+        print(f'Could not check installed version: {exc}', file=sys.stderr)
+        return 1
+    if blocked and not args.replace:
+        for dest in blocked:
             print(f'Existing skill: {dest}', file=sys.stderr)
         print('No active skills changed. Rerun with --replace to back up the existing skill and install the current one.', file=sys.stderr)
         return 1
