@@ -6,7 +6,7 @@ import subprocess
 import sys
 import tempfile
 
-REPOSITORY = 'https://github.com/eurogig/tourrific.git'
+REPOSITORY = 'https://github.com/eurogig/goshomi.git'
 
 
 def main():

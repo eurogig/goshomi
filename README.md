@@ -17,7 +17,7 @@ The GitHub installer below will install Goshomi after these changes are publishe
 Install for Codex and Claude Code with Python 3, Git, Node.js, and npm installed:
 
 ```sh
-curl -fsSLO https://raw.githubusercontent.com/eurogig/tourrific/main/install.py
+curl -fsSLO https://raw.githubusercontent.com/eurogig/goshomi/main/install.py
 python3 install.py
 ```
 
