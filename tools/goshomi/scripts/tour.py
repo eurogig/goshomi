@@ -252,7 +252,7 @@ def package(root,analysis,out,baseline=None,review_policy=None):
     if re.search(r'(?i)(?:/(?:users|home)/[^/\s\"\\]+|[a-z]:\\\\users\\\\[^\\\\\s\"]+)', payload):
         raise ValueError('Tour contains a developer-specific absolute home path; remove or redact it before packaging')
     inline=json.dumps(tour,ensure_ascii=True).replace('<','\\u003c').replace('>','\\u003e').replace('&','\\u0026')
-    html='<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Goshomi — Your Code. Explained.</title><link rel="stylesheet" href="assets/viewer.css"><script>window.GOSHOMI_TOUR='+inline+';</script><script defer src="assets/viewer.js"></script></head><body><div id="root"></div></body></html>\n'
+    html='<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Goshomi — Go Show Me. My Code.</title><link rel="stylesheet" href="assets/viewer.css"><script>window.GOSHOMI_TOUR='+inline+';</script><script defer src="assets/viewer.js"></script></head><body><div id="root"></div></body></html>\n'
     files={'index.html':html.encode(),'tour.json':payload.encode(),'assets/viewer.js':js[0].read_bytes(),'assets/viewer.css':css[0].read_bytes()}
     for name,source in tour['sources'].items(): files['sources/'+digest(name)+'.txt']=source['content'].encode()
     if baseline is not None and git_snapshot(root,out) != baseline:

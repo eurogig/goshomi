@@ -17,13 +17,17 @@ The GitHub installer below will install Goshomi after these changes are publishe
 Install for Codex and Claude Code with Python 3, Git, Node.js, and npm installed:
 
 ```sh
-curl -fsSLO https://raw.githubusercontent.com/eurogig/goshomi/main/install.py
-python3 install.py
+(
+  tmpdir=$(mktemp -d) || exit 1
+  trap 'rm -rf "$tmpdir"' EXIT
+  curl -fsSL https://raw.githubusercontent.com/eurogig/goshomi/main/install.py -o "$tmpdir/install.py" || exit 1
+  python3 "$tmpdir/install.py"
+)
 ```
 
-The installer downloads the repository into a temporary directory, builds the viewer, and installs an independent copy under `~/.local/share/goshomi/versions/`. It links the skill for both agents; use `--agent codex` or `--agent claude` for just one. Restart the agent to discover the skill. You can delete `install.py` after installation.
+The installer downloads the repository into a temporary directory, builds the viewer, and installs an independent copy under `~/.local/share/goshomi/versions/`. It links the skill for both agents; use `--agent codex` or `--agent claude` for just one. Restart the agent to discover the skill. The downloaded installer and temporary build files are removed automatically.
 
-To update or replace an existing installation, run `python3 install.py --replace`. Conflicting Goshomi skills are backed up outside the active skill directories. Existing `tourrific` skills are separate and must be removed or backed up manually when you migrate. To pin a reviewed commit or tag, pass `--ref <commit-or-tag>`; the default is `main`. Review the installer and source before running them. Building requires network access to GitHub and the configured npm registry.
+To update or replace an existing installation, run the same command with `--replace` after `"$tmpdir/install.py"`. Conflicting Goshomi skills are backed up outside the active skill directories. Existing `tourrific` skills are separate and must be removed or backed up manually when you migrate. To pin a reviewed commit or tag, pass `--ref <commit-or-tag>`; the default is `main`. Review the installer and source before running them. Building requires network access to GitHub and the configured npm registry.
 
 For development, install directly from a checkout after building the viewer:
 
