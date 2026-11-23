@@ -8,6 +8,7 @@ import 'prismjs/components/prism-typescript';
 import 'prismjs/components/prism-tsx';
 import {ArrowLeft, ArrowRight, Check, ChevronDown, Code2, Compass, GitBranch, Layers3, MousePointer2, Shield, Sparkles, Maximize2, X, Copy, ExternalLink, Bug} from 'lucide-react';
 import './style.css';
+import {followTourNode} from './mapFollow';
 
 type Ref = {path:string;start:number;end:number;symbol?:string};
 type Reference = {title:string;url:string};
@@ -73,18 +74,8 @@ function App(){
   const alreadyExpanded=wasExpanded.current; wasExpanded.current=expanded;
   if(!expanded||!alreadyExpanded)return;
   const frame=window.requestAnimationFrame(()=>{
-   const flow=flowRef.current, diagram=diagramRef.current, target=flow?.getNode(active);
-   if(!flow||!diagram||!target)return;
-   const width=target.measured?.width, height=target.measured?.height;
-   if(!width||!height)return;
-   const viewport=flow.getViewport(), bounds=diagram.getBoundingClientRect();
-   const left=target.position.x*viewport.zoom+viewport.x, top=target.position.y*viewport.zoom+viewport.y;
-   const right=left+width*viewport.zoom, bottom=top+height*viewport.zoom;
-   // Leave room for the floating map header and controls when judging visibility.
-   const margin=24, header=Math.min(90,bounds.height/3);
-   if(left<margin||right>bounds.width-margin||top<header||bottom>bounds.height-margin){
-    void flow.setCenter(target.position.x+width/2,target.position.y+height/2,{zoom:viewport.zoom,duration:250});
-   }
+   const flow=flowRef.current, diagram=diagramRef.current;
+   if(flow&&diagram)followTourNode(flow,active,diagram.getBoundingClientRect());
   });
   return ()=>window.cancelAnimationFrame(frame);
  },[expanded,ci,si,active]);

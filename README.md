@@ -6,22 +6,16 @@ Tourrific turns a codebase into an interactive, source-grounded architectural to
 
 ## Install
 
-Tourrific is distributed from this GitHub repository. Review the source before installing, and use a tagged release or commit if you want to pin the version.
-
-To install independently of your working checkout, choose a full commit SHA that includes `--standalone` and substitute it below. Release tags can also be checked out, but a commit SHA pins the exact source.
+Install for Codex and Claude Code with Python 3, Git, Node.js, and npm installed:
 
 ```sh
-git clone https://github.com/eurogig/tourrific.git tourrific-install
-cd tourrific-install
-git checkout --detach <FULL_COMMIT_SHA>
-npm ci --prefix tools/tourrific/viewer \
-  --registry="$(npm config get registry)" \
-  --verbose
-npm --prefix tools/tourrific/viewer run build
-python3 tools/tourrific/scripts/install-skill.py --agent both --scope user --standalone
+curl -fsSLO https://raw.githubusercontent.com/eurogig/tourrific/main/install.py
+python3 install.py
 ```
 
-The installer copies the skill, scripts, schema, and built viewer to `~/.local/share/tourrific/versions/<commit>/`, then links the agents to that copy. You may remove the temporary checkout after installation. To update, repeat the steps with a different reviewed commit and add `--replace` to the installer command; the previous skill links are backed up. Choose `--agent codex` or `--agent claude` to install for one agent.
+The installer downloads the repository into a temporary directory, builds the viewer, and installs an independent copy under `~/.local/share/tourrific/versions/`. It links the skill for both agents; use `--agent codex` or `--agent claude` for just one. Restart the agent to discover the skill. You can delete `install.py` after installation.
+
+To update or replace an existing installation, run `python3 install.py --replace`. Conflicting skills are backed up outside the active skill directories. To pin a reviewed commit or tag, pass `--ref <commit-or-tag>`; the default is `main`. Review the installer and source before running them. Building requires network access to GitHub and the configured npm registry.
 
 For development, install directly from a checkout after building the viewer:
 

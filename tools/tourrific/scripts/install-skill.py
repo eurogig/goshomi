@@ -85,7 +85,7 @@ def main():
     if conflicts and not args.replace:
         for dest in conflicts:
             print(f'Existing skill: {dest}', file=sys.stderr)
-        print('Nothing changed. Rerun with --replace to back up the existing skill and install the current one.', file=sys.stderr)
+        print('No active skills changed. Rerun with --replace to back up the existing skill and install the current one.', file=sys.stderr)
         return 1
     installed, backups = [], []
     try:
@@ -100,8 +100,17 @@ def main():
                 backup = backup_dir / f'tourrific-{stamp}'
                 if exists(backup):
                     raise FileExistsError(f'Backup destination already exists: {backup}')
-                dest.rename(backup)
-                backups.append((dest, backup))
+                original_link = dest.readlink() if dest.is_symlink() else None
+                if original_link is not None and not original_link.is_absolute():
+                    backup.symlink_to(dest.resolve(), target_is_directory=True)
+                    try:
+                        dest.unlink()
+                    except OSError:
+                        backup.unlink()
+                        raise
+                else:
+                    dest.rename(backup)
+                backups.append((dest, backup, original_link))
                 print(f'Backed up: {dest} -> {backup}')
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.symlink_to(source.resolve(), target_is_directory=True)
@@ -114,9 +123,13 @@ def main():
                 dest.unlink()
             except OSError as rollback_error:
                 print(f'Could not remove new link {dest}: {rollback_error}', file=sys.stderr)
-        for dest, backup in reversed(backups):
+        for dest, backup, original_link in reversed(backups):
             try:
-                backup.rename(dest)
+                if original_link is not None and not original_link.is_absolute():
+                    dest.symlink_to(original_link, target_is_directory=True)
+                    backup.unlink()
+                else:
+                    backup.rename(dest)
             except OSError as rollback_error:
                 print(f'Could not restore {backup} to {dest}: {rollback_error}', file=sys.stderr)
         print(f'Installation failed: {exc}', file=sys.stderr)

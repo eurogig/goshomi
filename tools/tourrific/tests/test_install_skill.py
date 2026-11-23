@@ -63,4 +63,68 @@ class InstallTest(unittest.TestCase):
             self.assertEqual(run(), 0)
             self.assertEqual(len(list((root / '.agents/tourrific-backups').glob('tourrific-*'))), 1)
 
+    def test_relative_symlink_backup_and_rollback(self):
+        with tempfile.TemporaryDirectory(prefix='tourrific-links-') as tmp:
+            root = Path(tmp)
+            original = root / '.agents/skills/old-skill'
+            original.mkdir(parents=True)
+            (original / 'SKILL.md').write_text('old')
+            dest = original.parent / 'tourrific'
+            dest.symlink_to('old-skill', target_is_directory=True)
+            claude = root / '.claude/skills/tourrific'
+            def run():
+                with patch.object(sys, 'argv', [str(SCRIPT), '--agent', 'both', '--scope', 'user', '--replace']), patch.object(Path, 'home', return_value=root), redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+                    return installer.main()
+            real_symlink = Path.symlink_to
+            def fail_second(path, target, *args, **kwargs):
+                if path == claude:
+                    raise OSError('simulated failure')
+                return real_symlink(path, target, *args, **kwargs)
+            with patch.object(Path, 'symlink_to', fail_second):
+                self.assertEqual(run(), 1)
+            self.assertEqual(dest.readlink(), Path('old-skill'))
+            self.assertEqual((dest / 'SKILL.md').read_text(), 'old')
+            self.assertFalse(claude.exists())
+            self.assertEqual(run(), 0)
+            backup = next((root / '.agents/tourrific-backups').glob('tourrific-*'))
+            self.assertEqual((backup / 'SKILL.md').read_text(), 'old')
+
+    def test_bootstrap_installs_from_git_checkout(self):
+        bootstrap_spec = importlib.util.spec_from_file_location('bootstrap', SCRIPT.parents[3] / 'install.py')
+        bootstrap = importlib.util.module_from_spec(bootstrap_spec)
+        bootstrap_spec.loader.exec_module(bootstrap)
+        with tempfile.TemporaryDirectory(prefix='tourrific-bootstrap-') as tmp:
+            root = Path(tmp)
+            repo = root / 'repo'
+            repo.mkdir()
+            subprocess.run(['git', 'init', '-q', '-b', 'main', str(repo)], check=True)
+            files = {'.agents/skills/tourrific/SKILL.md': 'skill',
+                     'tools/tourrific/scripts/tour.py': 'script',
+                     'tools/tourrific/schema/tour.schema.json': '{}',
+                     '.gitignore': 'dist/\n'}
+            for name, content in files.items():
+                path = repo / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content)
+            target = repo / 'tools/tourrific/scripts/install-skill.py'
+            target.write_text(SCRIPT.read_text())
+            subprocess.run(['git', '-C', str(repo), 'add', '.'], check=True)
+            subprocess.run(['git', '-C', str(repo), '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-qm', 'fixture'], check=True)
+            real_run = subprocess.run
+            def run(command, **kwargs):
+                if command[0] == 'npm':
+                    if command[1] == 'run':
+                        assets = Path(command[-1]) / 'dist/assets'
+                        assets.mkdir(parents=True)
+                        (assets / 'viewer.js').write_text('js')
+                        (assets / 'viewer.css').write_text('css')
+                    return subprocess.CompletedProcess(command, 0)
+                return real_run(command, **kwargs)
+            with patch.object(bootstrap, 'REPOSITORY', str(repo)), patch.object(sys, 'argv', ['install.py', '--agent', 'codex']), patch.dict('os.environ', {'HOME': str(root)}), patch.object(subprocess, 'run', side_effect=run):
+                self.assertEqual(bootstrap.main(), 0)
+            installed = root / '.agents/skills/tourrific'
+            self.assertEqual((installed / 'SKILL.md').read_text(), 'skill')
+            self.assertTrue((installed / 'viewer/dist/assets/viewer.js').is_file())
+            self.assertTrue((installed / 'scripts/tour.py').is_file())
+
 if __name__ == '__main__': unittest.main()
