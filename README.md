@@ -8,8 +8,6 @@ Goshomi turns a codebase into an interactive, source-grounded architectural tour
 
 ![Tour preview showing a threat model and source evidence](assets/tourrific-screenshot.png)
 
-*The screenshot shows the previous Tourrific branding.*
-
 ## Install
 
 The GitHub installer below will install Goshomi after these changes are published to the repository.
