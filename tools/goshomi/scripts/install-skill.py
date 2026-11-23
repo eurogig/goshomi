@@ -21,23 +21,23 @@ def standalone_source(checkout, base):
     commit = git('rev-parse', '--verify', 'HEAD^{commit}')
     if git('status', '--porcelain', '--untracked-files=normal'):
         raise ValueError('Standalone installation requires a clean checkout. Commit or discard changes first.')
-    assets = checkout / 'tools/tourrific/viewer/dist/assets'
+    assets = checkout / 'tools/goshomi/viewer/dist/assets'
     if len(list(assets.glob('*.js'))) != 1 or len(list(assets.glob('*.css'))) != 1:
         raise ValueError('Build the viewer before standalone installation.')
-    versions = base / '.local/share/tourrific/versions'
+    versions = base / '.local/share/goshomi/versions'
     versions.mkdir(parents=True, exist_ok=True)
     dest = versions / commit
     with tempfile.TemporaryDirectory(prefix='.install-', dir=versions) as tmp:
         stage = Path(tmp) / 'version'
-        skill = stage / '.agents/skills/tourrific'
+        skill = stage / '.agents/skills/goshomi'
         skill.mkdir(parents=True)
-        shutil.copy2(checkout / '.agents/skills/tourrific/SKILL.md', skill / 'SKILL.md')
+        shutil.copy2(checkout / '.agents/skills/goshomi/SKILL.md', skill / 'SKILL.md')
         for name in ('scripts', 'schema', 'viewer'):
-            (skill / name).symlink_to(f'../../../tools/tourrific/{name}', target_is_directory=True)
-        target = stage / 'tools/tourrific'
-        shutil.copytree(checkout / 'tools/tourrific/scripts', target / 'scripts', ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
-        shutil.copytree(checkout / 'tools/tourrific/schema', target / 'schema')
-        shutil.copytree(checkout / 'tools/tourrific/viewer/dist', target / 'viewer/dist')
+            (skill / name).symlink_to(f'../../../tools/goshomi/{name}', target_is_directory=True)
+        target = stage / 'tools/goshomi'
+        shutil.copytree(checkout / 'tools/goshomi/scripts', target / 'scripts', ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
+        shutil.copytree(checkout / 'tools/goshomi/schema', target / 'schema')
+        shutil.copytree(checkout / 'tools/goshomi/viewer/dist', target / 'viewer/dist')
         def fingerprint(root):
             result = {}
             for path in root.rglob('*'):
@@ -51,7 +51,7 @@ def standalone_source(checkout, base):
         else:
             stage.rename(dest)
     print(f'Installed version files: {dest}')
-    return dest / '.agents/skills/tourrific'
+    return dest / '.agents/skills/goshomi'
 
 
 def main():
@@ -65,7 +65,7 @@ def main():
     if args.scope == 'user' and args.project:
         parser.error('--project applies only to project scope')
     checkout = Path(__file__).resolve().parents[3]
-    source = checkout / '.agents' / 'skills' / 'tourrific'
+    source = checkout / '.agents' / 'skills' / 'goshomi'
     if not (source / 'SKILL.md').is_file():
         parser.error(f'Canonical skill not found: {source}')
     base = (args.project or Path.cwd()).expanduser().resolve() if args.scope == 'project' else Path.home()
@@ -80,7 +80,7 @@ def main():
             print(f'Standalone installation failed: {exc}', file=sys.stderr)
             return 1
     agents = ('codex', 'claude') if args.agent == 'both' else (args.agent,)
-    destinations = [base / ('.agents' if agent == 'codex' else '.claude') / 'skills' / 'tourrific' for agent in agents]
+    destinations = [base / ('.agents' if agent == 'codex' else '.claude') / 'skills' / 'goshomi' for agent in agents]
     conflicts = [dest for dest in destinations if exists(dest) and dest.resolve() != source.resolve()]
     if conflicts and not args.replace:
         for dest in conflicts:
@@ -94,10 +94,10 @@ def main():
                 print(f'Already installed: {dest}')
                 continue
             if exists(dest):
-                backup_dir = dest.parent.parent / 'tourrific-backups'
+                backup_dir = dest.parent.parent / 'goshomi-backups'
                 backup_dir.mkdir(parents=True, exist_ok=True)
                 stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
-                backup = backup_dir / f'tourrific-{stamp}'
+                backup = backup_dir / f'goshomi-{stamp}'
                 if exists(backup):
                     raise FileExistsError(f'Backup destination already exists: {backup}')
                 original_link = dest.readlink() if dest.is_symlink() else None

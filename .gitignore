@@ -3,5 +3,6 @@ dist/
 *.tsbuildinfo
 __pycache__/
 *.py[cod]
+.goshomi/
 .tourrific/
-tools/tourrific/tours/
+tools/goshomi/tours/

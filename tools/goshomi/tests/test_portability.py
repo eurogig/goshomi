@@ -10,7 +10,7 @@ CLI = Path(__file__).resolve().parents[1] / 'scripts' / 'tour.py'
 
 class PortableTourTest(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory(prefix='tourrific-test-')
+        self.temp = tempfile.TemporaryDirectory(prefix='goshomi-test-')
         self.base = Path(self.temp.name)
         self.repo = self.base / 'repo'
         self.repo.mkdir()
@@ -36,10 +36,10 @@ class PortableTourTest(unittest.TestCase):
         self.run_cli('prepare', cwd=self.repo / 'nested')
         self.run_cli('package', '--analysis', self.analysis, cwd=self.repo / 'nested')
         self.run_cli('verify')
-        out = self.repo / '.tourrific'
+        out = self.repo / '.goshomi'
         tour = json.loads((out / 'tour.json').read_text())
         self.assertEqual(tour['sources']['app.py']['content'], '\ndef main():\n    return "hello"')
-        self.assertIn('window.TOURRIFIC_TOUR=', (out / 'index.html').read_text())
+        self.assertIn('window.GOSHOMI_TOUR=', (out / 'index.html').read_text())
         self.assertTrue((out / 'assets/viewer.js').is_file())
         self.assertTrue((out / 'assets/viewer.css').is_file())
         for file in out.rglob('*'):
@@ -49,6 +49,24 @@ class PortableTourTest(unittest.TestCase):
         self.assertEqual(json.loads((out / 'tour.json').read_text()), tour)
         (self.repo / 'app.py').write_text('changed\n')
         self.run_cli('verify', succeeds=False)
+
+    def test_installed_skill_packages_a_tour_and_ignores_legacy_output(self):
+        legacy = self.repo / '.tourrific'
+        legacy.mkdir()
+        (legacy / 'old.py').write_text('legacy generated content')
+        installer = CLI.parent / 'install-skill.py'
+        subprocess.run([sys.executable, str(installer), '--agent', 'codex', '--scope', 'project',
+                        '--project', str(self.repo)], check=True, capture_output=True, text=True)
+        installed = self.repo / '.agents/skills/goshomi'
+        self.assertTrue((installed / 'SKILL.md').is_file())
+        command = [sys.executable, str(installed / 'scripts/tour.py')]
+        indexed = subprocess.run(command + ['index', '--repo', str(self.repo)], check=True, capture_output=True, text=True)
+        self.assertNotIn('.tourrific/old.py', indexed.stdout)
+        subprocess.run(command + ['prepare', '--repo', str(self.repo)], check=True, capture_output=True, text=True)
+        subprocess.run(command + ['package', '--repo', str(self.repo), '--analysis', str(self.analysis)], check=True, capture_output=True, text=True)
+        subprocess.run(command + ['verify', '--repo', str(self.repo)], check=True, capture_output=True, text=True)
+        self.assertTrue((self.repo / '.goshomi' / '.goshomi-owner.json').is_file())
+        self.assertEqual((legacy / 'old.py').read_text(), 'legacy generated content')
 
     def test_risk_assessment_and_reference_validation(self):
         data = json.loads(self.analysis.read_text())
@@ -121,7 +139,7 @@ class PortableTourTest(unittest.TestCase):
         self.assertEqual(baseline, self.run_cli('snapshot', cwd=self.repo / 'nested').stdout.strip())
         self.run_cli('package', '--analysis', self.analysis, '--baseline', baseline, '--review-policy', 'self-contained-remediation-2026-v3')
         self.run_cli('check')
-        (self.repo / '.tourrific' / 'analysis.json').write_text('output does not invalidate the tour')
+        (self.repo / '.goshomi' / 'analysis.json').write_text('output does not invalidate the tour')
         (self.repo / 'ignored.txt').write_text('ignored by git')
         self.run_cli('check')
         (self.repo / 'ignored.py').write_text('eligible source')
@@ -145,7 +163,7 @@ class PortableTourTest(unittest.TestCase):
         self.run_cli('check', succeeds=False)
         subprocess.run(['git', '-C', str(self.repo), 'reset', '-q', 'HEAD', '--', 'unrelated.txt'], check=True)
         self.run_cli('check')
-        (self.repo / '.tourrific' / 'assets' / 'viewer.js').write_text('corrupted')
+        (self.repo / '.goshomi' / 'assets' / 'viewer.js').write_text('corrupted')
         self.run_cli('check', succeeds=False)
 
     def test_new_commit_invalidates_tour(self):
@@ -205,15 +223,15 @@ class PortableTourTest(unittest.TestCase):
     def test_output_status_detects_git_exposure(self):
         def status(*args): return json.loads(self.run_cli('output-status', *args).stdout)
         self.assertEqual(status()['status'], 'exposed')
-        (self.repo / '.gitignore').write_text('/.tourrific/\n')
+        (self.repo / '.gitignore').write_text('/.goshomi/\n')
         self.assertEqual(status()['status'], 'ignored')
-        out = self.repo / '.tourrific'
+        out = self.repo / '.goshomi'
         out.mkdir()
         (out / 'tour.json').write_text('{}')
-        subprocess.run(['git', '-C', str(self.repo), 'add', '-f', '.tourrific/tour.json'], check=True)
+        subprocess.run(['git', '-C', str(self.repo), 'add', '-f', '.goshomi/tour.json'], check=True)
         result = status()
         self.assertEqual(result['status'], 'tracked')
-        self.assertIn('.tourrific/tour.json', result['tracked_files'])
+        self.assertIn('.goshomi/tour.json', result['tracked_files'])
         self.assertEqual(status('--output', self.base / 'outside')['status'], 'outside_git')
         other = self.base / 'other'; other.mkdir()
         subprocess.run(['git', 'init', '-q', str(other)], check=True)

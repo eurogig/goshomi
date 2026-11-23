@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Index, prepare, package and verify a repository-local Tourrific tour."""
+"""Index, prepare, package and verify a repository-local Goshomi tour."""
 import argparse, datetime, hashlib, json, os, re, stat, subprocess, sys
 from pathlib import Path
 
-EXCLUDED = {'.git', '.env', '.tourrific', 'node_modules', 'dist', 'build', '.next', 'coverage', 'vendor', 'tours', '__pycache__'}
+EXCLUDED = {'.git', '.env', '.goshomi', '.tourrific', 'node_modules', 'dist', 'build', '.next', 'coverage', 'vendor', 'tours', '__pycache__'}
 SECRET = re.compile(r'(?i)(?:-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|(?:api[_-]?key|secret|password|token)\s*[:=]\s*["\'][^"\'\s]{8,}["\']|(?:sk|ghp|github_pat)-[A-Za-z0-9_-]{16,})')
 EXTENSIONS = {'.ts','.tsx','.js','.jsx','.mjs','.json','.py','.go','.rs','.java','.md','.yaml','.yml','.css','.html','.toml','.sh'}
 ASSET_ROOT = Path(__file__).resolve().parent.parent
-MARKER = '.tourrific-owner.json'
+MARKER = '.goshomi-owner.json'
 REVIEW_POLICY = 'self-contained-remediation-2026-v3'
 PREVIOUS_REVIEW_POLICY = 'security-path-review-2026-v2'
 LEGACY_REVIEW_POLICY = 'owasp-genai-2026-v1'
@@ -69,7 +69,7 @@ def git_snapshot(root, output):
         if unborn.returncode: raise ValueError('Git snapshot unavailable: could not identify HEAD')
         head_bytes=b'unborn:'+unborn.stdout
     else: head_bytes=head.stdout
-    state=hashlib.sha256(b'tourrific-git-snapshot-v1\0'+head_bytes)
+    state=hashlib.sha256(b'goshomi-git-snapshot-v1\0'+head_bytes)
     for name, stages in sorted(entries.items()):
         relative=Path(os.fsdecode(name))
         if relative.is_absolute() or '..' in relative.parts: raise ValueError('Unsafe Git path')
@@ -123,15 +123,15 @@ def all_refs(obj):
         for value in obj: yield from all_refs(value)
 
 def output_path(root, option):
-    raw = Path(option).expanduser() if option else root / '.tourrific'
+    raw = Path(option).expanduser() if option else root / '.goshomi'
     # Resolve parent separately so an output-directory symlink is never followed.
     if raw.is_symlink(): raise ValueError('Output directory cannot be a symlink')
     out=raw.resolve()
     if out == root or root.is_relative_to(out): raise ValueError('Output must not be the repository root or its ancestor')
     # Never write into this checkout while analyzing a different repository.
     checkout=ASSET_ROOT.parent.parent
-    if (checkout / '.agents/skills/tourrific/SKILL.md').exists() and root != checkout and out.is_relative_to(checkout):
-        raise ValueError('Output cannot be inside the Tourrific source checkout for a different target')
+    if (checkout / '.agents/skills/goshomi/SKILL.md').exists() and root != checkout and out.is_relative_to(checkout):
+        raise ValueError('Output cannot be inside the Goshomi source checkout for a different target')
     return out
 
 def owner_id(root): return digest(str(root))
@@ -158,7 +158,7 @@ def output_status(out):
     tracked_files = [os.fsdecode(name) for name in tracked.stdout.split(b'\0') if name]
     # Check an arbitrary future file as well as existing files, since negated
     # patterns can leave individual files exposed inside an ignored directory.
-    paths = [out / name for name in ('.tourrific-ignore-probe', MARKER, 'analysis.json',
+    paths = [out / name for name in ('.goshomi-ignore-probe', MARKER, 'analysis.json',
              'index.html', 'tour.json', 'assets/viewer.js', 'assets/viewer.css',
              'sources/' + '0' * 64 + '.txt')]
     if out.is_dir():
@@ -183,7 +183,7 @@ def prepare(root,out):
         if owner.get('repositoryId') != owner_id(root): raise ValueError('Output belongs to a different repository')
         if not isinstance(owner.get('files'), list): raise ValueError('Invalid owner marker')
         return owner
-    if out.exists() and any(out.iterdir()): raise ValueError('Output directory is not empty and has no Tourrific ownership marker')
+    if out.exists() and any(out.iterdir()): raise ValueError('Output directory is not empty and has no Goshomi ownership marker')
     out.mkdir(parents=True,exist_ok=True)
     owner={'version':1,'repositoryId':owner_id(root),'files':[]}
     marker.write_text(json.dumps(owner,indent=2)+'\n')
@@ -252,7 +252,7 @@ def package(root,analysis,out,baseline=None,review_policy=None):
     if re.search(r'(?i)(?:/(?:users|home)/[^/\s\"\\]+|[a-z]:\\\\users\\\\[^\\\\\s\"]+)', payload):
         raise ValueError('Tour contains a developer-specific absolute home path; remove or redact it before packaging')
     inline=json.dumps(tour,ensure_ascii=True).replace('<','\\u003c').replace('>','\\u003e').replace('&','\\u0026')
-    html='<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Tourrific — Your Code. Explained.</title><link rel="stylesheet" href="assets/viewer.css"><script>window.TOURRIFIC_TOUR='+inline+';</script><script defer src="assets/viewer.js"></script></head><body><div id="root"></div></body></html>\n'
+    html='<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Goshomi — Your Code. Explained.</title><link rel="stylesheet" href="assets/viewer.css"><script>window.GOSHOMI_TOUR='+inline+';</script><script defer src="assets/viewer.js"></script></head><body><div id="root"></div></body></html>\n'
     files={'index.html':html.encode(),'tour.json':payload.encode(),'assets/viewer.js':js[0].read_bytes(),'assets/viewer.css':css[0].read_bytes()}
     for name,source in tour['sources'].items(): files['sources/'+digest(name)+'.txt']=source['content'].encode()
     if baseline is not None and git_snapshot(root,out) != baseline:
@@ -322,15 +322,15 @@ def check_reusable(root,out):
 def main():
     p=argparse.ArgumentParser(description=__doc__); sub=p.add_subparsers(dest='cmd',required=True)
     for command in ('index','prepare','package','verify','snapshot','check','output-status'):
-        c=sub.add_parser(command); c.add_argument('--repo',help='Target directory (default: current project Git root, or current directory)'); c.add_argument('--output',help='Output directory (default: REPO/.tourrific)')
+        c=sub.add_parser(command); c.add_argument('--repo',help='Target directory (default: current project Git root, or current directory)'); c.add_argument('--output',help='Output directory (default: REPO/.goshomi)')
         if command=='package':
             c.add_argument('--analysis',required=True,help='Agent-authored analysis JSON')
             c.add_argument('--baseline',help='Git snapshot captured before analysis; enables safe reuse')
             c.add_argument('--review-policy',choices=[REVIEW_POLICY, PREVIOUS_REVIEW_POLICY, LEGACY_REVIEW_POLICY],help='Attest that the agent completed the specified review before packaging')
     a=p.parse_args(); root=target_repo(a.repo); out=output_path(root,a.output)
     checkout=ASSET_ROOT.parent.parent
-    if a.cmd in ('prepare','package') and not a.repo and root == checkout and (checkout / '.agents/skills/tourrific/SKILL.md').exists():
-        raise ValueError('Select the Tourrific source checkout explicitly with --repo before writing a tour here')
+    if a.cmd in ('prepare','package') and not a.repo and root == checkout and (checkout / '.agents/skills/goshomi/SKILL.md').exists():
+        raise ValueError('Select the Goshomi source checkout explicitly with --repo before writing a tour here')
     if a.cmd=='output-status': print(json.dumps(output_status(out), indent=2))
     elif a.cmd=='index': print(json.dumps({'revision':revision(root),'files':index(root,out)},indent=2))
     elif a.cmd=='prepare': prepare(root,out); print(f'Output ready: {out}')
